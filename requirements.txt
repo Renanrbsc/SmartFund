@@ -1,0 +1,7 @@
+requests
+beautifulsoup4
+tqdm
+pandas
+matplotlib
+openpyxl
+xlrd

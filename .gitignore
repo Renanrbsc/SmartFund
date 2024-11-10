@@ -121,6 +121,17 @@ celerybeat.pid
 # SageMath parsed files
 *.sage.py
 
+# File datasets
+
+# Ignore all Official files from B3Reports
+Datasets/Ingest/B3Reports/negociacao_*
+
+# Ignore Official files from Raw darfs_issued
+Datasets/Raw/darfs_issued.csv
+
+# Ignore Official files from Treated reports
+Datasets/Treated
+
 # Environments
 .env
 .venv
