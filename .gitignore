@@ -126,6 +126,9 @@ celerybeat.pid
 # Ignore all Official files from B3Reports
 Datasets/Ingest/B3Reports/negociacao_*
 
+# Ignore Official files from Investidor10
+Datasets/Ingest/Investidor10/investidor10_*
+
 # Ignore Official files from Raw darfs_issued
 Datasets/Raw/darfs_issued.csv
 

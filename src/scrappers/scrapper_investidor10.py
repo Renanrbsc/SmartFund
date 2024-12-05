@@ -1,16 +1,70 @@
 from bs4 import BeautifulSoup
 import time
 from tqdm import tqdm
-from src.scrappers.model_scrapper import ModelScrapper
+from requests.exceptions import ChunkedEncodingError, RequestException
+from src.scrappers.model_scrapper import ModelScraper
+import requests
 
 
-class ScraperInvestidor10(ModelScrapper):
+class ScraperInvestidor10(ModelScraper):
+    """
+    A scraper for fetching data from the "Investidor10" website, specifically focused on FIIs (Real Estate Investment Trusts).
+
+    This class extends the `ModelScraper` base class and customizes it for scraping information about FIIs from the Investidor10 website.
+
+    Attributes:
+        url (str): The base URL for FIIs data on the Investidor10 website.
+        list_fiis (list): A list to store data related to FIIs.
+    """
+
     def __init__(self) -> None:
+        """
+        Initializes the ScraperInvestidor10 with the specific URL for FIIs data
+        and an empty list for storing FIIs information.
+        """
         super().__init__()
         self.url = f"{self.url}fiis/"
         self.list_fiis = list()
 
+    def get_page_content(self, url: str, retries: int = 5, timeout: int = 10) -> str:
+        """
+        Makes a request to a webpage and returns its content, with support for retries in case of failures.
+
+        Args:
+            url (str): The URL of the webpage to fetch.
+            retries (int): The number of retry attempts in case of failure. Default is 5.
+            timeout (int): The timeout duration for the request in seconds. Default is 10.
+
+        Returns:
+            str: The content of the webpage as a string.
+
+        Raises:
+            RequestException: If all retry attempts fail.
+        """
+        for attempt in range(retries):
+            try:
+                response = requests.get(url, headers=self.headers, timeout=timeout)
+                response.raise_for_status()
+                return response.text
+            except (ChunkedEncodingError, RequestException) as e:
+                print(f"Error on attempt {attempt + 1} for {url}: {e}")
+                if attempt < retries - 1:
+                    import time
+
+                    time.sleep(2)
+                else:
+                    raise e
+
     def extract_main_values(self) -> list:
+        """
+        Extracts FII names and types from multiple pages on the Investidor10 website.
+
+        Returns:
+            list: A list of extracted FIIs data, each entry containing:
+                - FII name (str)
+                - FII type (str, default "Fii")
+                - Extraction date (datetime.date)
+        """
         page = 1
 
         while True:
@@ -32,11 +86,72 @@ class ScraperInvestidor10(ModelScrapper):
         return self.list_fiis
 
     def save_fiis_main(self, list_fiis: list) -> None:
+        """
+        Saves the list of FIIs data to a CSV file.
+
+        Args:
+            list_fiis (list): A list of FIIs data, where each entry contains:
+                - FII name (str)
+                - FII type (str)
+                - Extraction date (datetime.date)
+        """
         columns = ["fii_name", "fii_type", "date_process"]
         self.save_to_csv(columns, list_fiis, "investidor10_fiis_names")
 
     def extract_fiis_details_properties(self, list_fiis) -> list:
-        """This method will scrape the details of each individual FII"""
+        """
+        Extracts detailed information about each FII (Real Estate Investment Trust) and its properties
+        from the Investidor10 website. This method scrapes multiple attributes for each FII, including
+        financial metrics, general details, and property-related data.
+
+        It iterates over the provided list of FIIs, accessing individual pages for each FII to gather:
+        - Financial indicators like quote, dividend yield, price-to-book ratio, and liquidity.
+        - Additional information such as appreciation over the past 12 months, vacancy rate,
+        number of unit holders, issued units, net asset value per unit, last dividend payment,
+        corporate name, CNPJ (company registration number), target audience, investment objectives,
+        market sector, fund type, fund term, and management fee.
+        - Property details, including property name, state, and area, for each FII listed on the
+        Investidor10 platform.
+
+        The extracted data is then compiled into two separate lists:
+        1. `list_fiis_details`: Contains detailed information about each FII.
+        2. `list_fiis_properties`: Contains details of the properties associated with each FII.
+
+        Args:
+            list_fiis (list): A list of FIIs data, where each entry contains the name of an individual FII.
+
+        Returns:
+            tuple: A tuple containing two lists:
+                - list_fiis_details (list): A list of detailed attributes for each FII, where each entry is a list containing:
+                    - FII name (str)
+                    - Quote (str or None)
+                    - Dividend yield (str or None)
+                    - Price-to-book ratio (str or None)
+                    - Liquidity (str or None)
+                    - Appreciation in 12 months (str or None)
+                    - Vacancy (str or None)
+                    - Number of unit holders (str or None)
+                    - Issued units (str or None)
+                    - Net asset value per unit (str or None)
+                    - Net asset value (str or None)
+                    - Last dividend payment (str or None)
+                    - Corporate name (str or None)
+                    - CNPJ (str or None)
+                    - Target audience (str or None)
+                    - Investment objective (str or None)
+                    - Market sector (str or None)
+                    - Fund type (str or None)
+                    - Fund term (str or None)
+                    - Management type (str or None)
+                    - Management fee (str or None)
+                    - Extraction date (datetime.date)
+                - list_fiis_properties (list): A list of properties associated with each FII, where each entry is a list containing:
+                    - FII name (str)
+                    - Property name (str)
+                    - State (str)
+                    - Area (str)
+                    - Extraction date (datetime.date)
+        """
         list_fiis_details = list()
         list_fiis_properties = list()
 
@@ -63,18 +178,20 @@ class ScraperInvestidor10(ModelScrapper):
             management_type = None
             management_fee = None
 
-            content = self.get_page_content(f"{self.url + fii_name}")
-            soup = BeautifulSoup(content, "html.parser")
             try:
+                content = self.get_page_content(f"{self.url + fii_name}")
+                soup = BeautifulSoup(content, "html.parser")
+            except Exception as e:
+                print(f"\n\tError on {fii_name}: {str(e)}")
+            else:
                 quote = (
                     soup.find("div", class_="_card cotacao")
                     .find("div", class_="_card-body")
                     .find("span")
-                    .text.strip()
                 )
-            except Exception as e:
-                print(f"\n\tError on {fii_name}: {str(e)}")
-            else:
+                if quote:
+                    quote = quote.text.strip()
+
                 find_dividend_yield = (
                     soup.find_all("div", class_="_card dy")[0]
                     .find("div", class_="_card-body")
@@ -210,6 +327,12 @@ class ScraperInvestidor10(ModelScrapper):
         return list_fiis_details, list_fiis_properties
 
     def save_fiis_details(self, list_fiis_details: list) -> None:
+        """
+        Saves detailed FII information to a CSV file.
+
+        Args:
+            list_fiis_details (list): A list of detailed FII data.
+        """
         columns = [
             "fii_name",
             "quote",
@@ -234,13 +357,27 @@ class ScraperInvestidor10(ModelScrapper):
             "management_fee",
             "date_process",
         ]
-        self.save_to_csv(columns, list_fiis_details, r"investidor10_fiis_details")
+        self.save_to_csv(columns, list_fiis_details, "investidor10_fiis_details")
 
     def save_fiis_properties(self, list_fiis_properties: list) -> None:
+        """
+        Saves FII property information to a CSV file.
+
+        Args:
+            list_fiis_properties (list): A list of FII property data.
+        """
         columns = ["fii_name", "property_name", "state", "area", "date_process"]
         self.save_to_csv(columns, list_fiis_properties, "investidor10_fiis_properties")
 
     def run(self):
+        """
+        Executes the full scraping and saving process for FIIs data.
+
+        This method coordinates the entire process of collecting and saving FII data:
+        - Extracts main FII information.
+        - Extracts detailed FII information and property data.
+        - Saves both sets of data to CSV files.
+        """
         print("Started collect all Fii details!")
         print("Wait to finish process!")
 
